@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Print QR Codes — AR Exhibition</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Space Mono', monospace; background: #f5f0e8; padding: 2rem; }
+    h1 { font-size: 1rem; letter-spacing: 0.2em; text-transform: uppercase; color: #333; margin-bottom: 0.5rem; }
+    .intro { font-size: 0.7rem; color: #666; margin-bottom: 0.75rem; line-height: 1.8; }
+    #url-input-wrap { display: flex; gap: 0.75rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    #base-url { font-family: 'Space Mono', monospace; font-size: 0.75rem; padding: 0.75rem 1rem; border: 1px solid #ccc; background: white; width: 420px; max-width: 100%; }
+    #gen-btn { font-family: 'Space Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.75rem 1.5rem; background: #0a0a0a; color: #c9a84c; border: none; cursor: pointer; }
+    #gen-btn:hover { background: #222; }
+    #print-btn { font-family: 'Space Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.75rem 1.5rem; background: #2ecc71; color: white; border: none; cursor: pointer; display: none; }
+    #print-btn:hover { background: #27ae60; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; }
+    .qr-card { background: white; border: 1px solid #ddd; padding: 1.5rem; text-align: center; }
+    .qr-card .qr-box { margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; }
+    .qr-card .qr-box canvas, .qr-card .qr-box img { display: block; }
+    .qr-card .label { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: #333; margin-bottom: 0.25rem; }
+    .qr-card .sublabel { font-size: 0.55rem; color: #999; word-break: break-all; }
+
+    @media print {
+      body { padding: 0; background: white; }
+      h1, .intro, #url-input-wrap, #print-btn { display: none !important; }
+      .grid { grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+      .qr-card { border: 1px solid #eee; padding: 1rem; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>QR Code Generator — AR Exhibition</h1>
+<div class="intro">
+  1. Enter your GitHub Pages URL below (e.g. https://yourname.github.io/ar-exhibition)<br>
+  2. Click Generate — all 20 QR codes appear<br>
+  3. Click Print and print this page — cut out each QR code and place it next to the matching artwork
+</div>
+
+<div id="url-input-wrap">
+  <input type="text" id="base-url" placeholder="https://yourname.github.io/ar-exhibition" />
+  <button id="gen-btn" onclick="generateAll()">Generate QR Codes</button>
+  <button id="print-btn" onclick="window.print()">🖨 Print All</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+const STUDENTS = [
+  "Student 1","Student 2","Student 3","Student 4","Student 5",
+  "Student 6","Student 7","Student 8","Student 9","Student 10",
+  "Student 11","Student 12","Student 13","Student 14","Student 15",
+  "Student 16","Student 17","Student 18","Student 19","Student 20"
+];
+
+function generateAll() {
+  let base = document.getElementById('base-url').value.trim().replace(/\/$/, '');
+  if (!base) { alert('Please enter your GitHub Pages URL first.'); return; }
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  STUDENTS.forEach((name, i) => {
+    const id = i + 1;
+    const url = `${base}/index.html?s=${id}`;
+
+    const card = document.createElement('div');
+    card.className = 'qr-card';
+
+    const qrBox = document.createElement('div');
+    qrBox.className = 'qr-box';
+    qrBox.id = `qr-${id}`;
+
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = name;
+
+    const sublabel = document.createElement('div');
+    sublabel.className = 'sublabel';
+    sublabel.textContent = `?s=${id}`;
+
+    card.appendChild(qrBox);
+    card.appendChild(label);
+    card.appendChild(sublabel);
+    grid.appendChild(card);
+
+    new QRCode(document.getElementById(`qr-${id}`), {
+      text: url,
+      width: 160,
+      height: 160,
+      colorDark: '#0a0a0a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  });
+
+  document.getElementById('print-btn').style.display = 'inline-block';
+}
+</script>
+</body>
+</html>

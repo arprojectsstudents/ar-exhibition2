@@ -1,0 +1,5 @@
+Place student files here named:
+student01.jpg + student01.mp4
+student02.jpg + student02.mp4
+...
+student20.jpg + student20.mp4

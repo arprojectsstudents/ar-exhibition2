@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>AR Exhibition</title>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --ink: #0a0a0a; --paper: #f5f0e8; --gold: #c9a84c; --gold-light: #e8d5a3; --red: #c0392b; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); font-family: 'Space Mono', monospace; }
+
+    #overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--ink);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 2rem; text-align: center;
+      transition: opacity 0.8s ease;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .title { font-family: 'Playfair Display', serif; font-style: italic; font-size: clamp(1.8rem, 7vw, 2.5rem); color: var(--paper); margin-bottom: 0.3rem; }
+    .student-name { font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); margin-bottom: 2rem; }
+    .instruction { font-size: 0.7rem; color: var(--paper); opacity: 0.6; line-height: 2; margin-bottom: 2.5rem; }
+    .instruction span { color: var(--gold-light); opacity: 1; }
+
+    #status-msg { font-size: 0.65rem; color: var(--gold); letter-spacing: 0.1em; margin-bottom: 2rem; min-height: 1.2em; }
+
+    .progress-outer { width: 200px; height: 2px; background: #222; margin: 0 auto 2rem; }
+    .progress-inner { height: 2px; background: var(--gold); width: 0%; transition: width 0.3s; }
+
+    #start-btn {
+      display: none;
+      background: transparent; border: 1px solid var(--gold);
+      color: var(--gold); font-family: 'Space Mono', monospace;
+      font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+      padding: 1rem 2.5rem; cursor: pointer; transition: all 0.3s;
+    }
+    #start-btn:hover { background: var(--gold); color: var(--ink); }
+    #start-btn.show { display: inline-block; }
+
+    #hud {
+      position: fixed; inset: 0; z-index: 50;
+      pointer-events: none; display: none;
+    }
+    #hud.active { display: block; }
+    .hud-corner { position: absolute; width: 28px; height: 28px; border-color: var(--gold); border-style: solid; opacity: 0.7; }
+    .hud-corner.tl { top: 20px; left: 20px; border-width: 2px 0 0 2px; }
+    .hud-corner.tr { top: 20px; right: 20px; border-width: 2px 2px 0 0; }
+    .hud-corner.bl { bottom: 20px; left: 20px; border-width: 0 0 2px 2px; }
+    .hud-corner.br { bottom: 20px; right: 20px; border-width: 0 2px 2px 0; }
+    #hud-status {
+      position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+      background: rgba(10,10,10,0.75); border: 1px solid rgba(201,168,76,0.3);
+      color: var(--gold-light); font-size: 0.6rem; letter-spacing: 0.15em;
+      text-transform: uppercase; padding: 0.5rem 1.2rem; white-space: nowrap;
+      backdrop-filter: blur(8px);
+    }
+    #scan-ring {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 180px; height: 180px;
+      border: 1px solid rgba(201,168,76,0.5); border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:0.5} 50%{transform:translate(-50%,-50%) scale(1.08);opacity:1} }
+    #scan-ring.found { animation: none; opacity: 0; transition: opacity 0.5s; }
+
+    #ar-container { position: fixed; inset: 0; display: none; }
+    #ar-container.active { display: block; }
+
+    #error { position: fixed; inset: 0; z-index: 200; background: var(--ink); display: none; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
+    #error.show { display: flex; }
+    #error h2 { font-family: 'Playfair Display', serif; color: var(--red); margin-bottom: 1rem; }
+    #error p { font-size: 0.7rem; color: var(--paper); opacity: 0.6; line-height: 2; max-width: 280px; }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <div class="title">Animated<br>Exhibition</div>
+  <div class="student-name" id="student-name">Loading…</div>
+  <div id="status-msg">Preparing your artwork…</div>
+  <div class="progress-outer"><div class="progress-inner" id="prog"></div></div>
+  <div class="instruction" id="instruction" style="display:none">
+    Point your camera at<br><span>your painted artwork</span><br>to bring it to life
+  </div>
+  <button id="start-btn" onclick="startAR()">Open Camera</button>
+</div>
+
+<div id="hud">
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="hud-corner bl"></div>
+  <div class="hud-corner br"></div>
+  <div id="scan-ring"></div>
+  <div id="hud-status">Point camera at your artwork…</div>
+</div>
+
+<div id="ar-container"></div>
+
+<div id="error">
+  <h2>Camera Required</h2>
+  <p>Please allow camera access when prompted, then reload this page.</p>
+</div>
+
+<script>
+// ─── STUDENT DATA ────────────────────────────────────────────────────────────
+// Each student has: name, image filename, video filename
+// Files must be placed in the students/ folder
+const STUDENTS = {
+  "1":  { name: "Student 1",  image: "students/student01.jpg", video: "students/student01.mp4" },
+  "2":  { name: "Student 2",  image: "students/student02.jpg", video: "students/student02.mp4" },
+  "3":  { name: "Student 3",  image: "students/student03.jpg", video: "students/student03.mp4" },
+  "4":  { name: "Student 4",  image: "students/student04.jpg", video: "students/student04.mp4" },
+  "5":  { name: "Student 5",  image: "students/student05.jpg", video: "students/student05.mp4" },
+  "6":  { name: "Student 6",  image: "students/student06.jpg", video: "students/student06.mp4" },
+  "7":  { name: "Student 7",  image: "students/student07.jpg", video: "students/student07.mp4" },
+  "8":  { name: "Student 8",  image: "students/student08.jpg", video: "students/student08.mp4" },
+  "9":  { name: "Student 9",  image: "students/student09.jpg", video: "students/student09.mp4" },
+  "10": { name: "Student 10", image: "students/student10.jpg", video: "students/student10.mp4" },
+  "11": { name: "Student 11", image: "students/student11.jpg", video: "students/student11.mp4" },
+  "12": { name: "Student 12", image: "students/student12.jpg", video: "students/student12.mp4" },
+  "13": { name: "Student 13", image: "students/student13.jpg", video: "students/student13.mp4" },
+  "14": { name: "Student 14", image: "students/student14.jpg", video: "students/student14.mp4" },
+  "15": { name: "Student 15", image: "students/student15.jpg", video: "students/student15.mp4" },
+  "16": { name: "Student 16", image: "students/student16.jpg", video: "students/student16.mp4" },
+  "17": { name: "Student 17", image: "students/student17.jpg", video: "students/student17.mp4" },
+  "18": { name: "Student 18", image: "students/student18.jpg", video: "students/student18.mp4" },
+  "19": { name: "Student 19", image: "students/student19.jpg", video: "students/student19.mp4" },
+  "20": { name: "Student 20", image: "students/student20.jpg", video: "students/student20.mp4" },
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Get student ID from URL: index.html?s=3
+const params = new URLSearchParams(window.location.search);
+const sid = params.get('s');
+const student = STUDENTS[sid];
+
+if (!student) {
+  document.getElementById('student-name').textContent = 'Invalid QR code';
+  document.getElementById('status-msg').textContent = 'Please scan the QR code next to an artwork.';
+} else {
+  document.getElementById('student-name').textContent = student.name;
+  precompileTarget();
+}
+
+let compiledMindData = null;
+
+async function precompileTarget() {
+  setStatus('Loading artwork data…');
+  setProgress(10);
+
+  try {
+    // Load the student's image
+    const img = await loadImage(student.image);
+    setProgress(30);
+    setStatus('Analysing artwork…');
+
+    // Compile single image target in browser
+    const compiler = new MINDAR.IMAGE.Compiler();
+    await compiler.compileImageTargets([img], (progress) => {
+      setProgress(30 + progress * 0.6);
+      setStatus('Preparing AR… ' + Math.round(progress) + '%');
+    });
+
+    compiledMindData = await compiler.exportData();
+    setProgress(100);
+    setStatus('Ready!');
+
+    // Show start button
+    document.getElementById('instruction').style.display = 'block';
+    document.getElementById('start-btn').classList.add('show');
+    document.getElementById('status-msg').style.display = 'none';
+    document.getElementById('prog').parentElement.style.display = 'none';
+
+  } catch(err) {
+    setStatus('Error preparing artwork. Please reload.');
+    console.error(err);
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load image: ' + src));
+    img.src = src;
+  });
+}
+
+function setStatus(msg) { document.getElementById('status-msg').textContent = msg; }
+function setProgress(pct) { document.getElementById('prog').style.width = pct + '%'; }
+
+function startAR() {
+  if (!compiledMindData) return;
+  document.getElementById('overlay').classList.add('hidden');
+  setTimeout(() => {
+    buildScene();
+    document.getElementById('hud').classList.add('active');
+    document.getElementById('ar-container').classList.add('active');
+  }, 800);
+}
+
+function buildScene() {
+  // Create object URL from compiled mind data
+  const mindBlob = new Blob([compiledMindData]);
+  const mindUrl = URL.createObjectURL(mindBlob);
+
+  const container = document.getElementById('ar-container');
+
+  const scene = document.createElement('a-scene');
+  scene.setAttribute('mindar-image', `imageTargetSrc: ${mindUrl}; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;`);
+  scene.setAttribute('color-space', 'sRGB');
+  scene.setAttribute('renderer', 'colorManagement: true;');
+  scene.setAttribute('vr-mode-ui', 'enabled: false');
+  scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+  scene.setAttribute('embedded', '');
+  scene.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;';
+
+  // Assets
+  const assets = document.createElement('a-assets');
+  const vid = document.createElement('video');
+  vid.id = 'ar-video';
+  vid.src = student.video;
+  vid.setAttribute('playsinline', '');
+  vid.setAttribute('webkit-playsinline', '');
+  vid.loop = true;
+  vid.preload = 'auto';
+  assets.appendChild(vid);
+  scene.appendChild(assets);
+
+  // Camera
+  const cam = document.createElement('a-camera');
+  cam.setAttribute('position', '0 0 0');
+  cam.setAttribute('look-controls', 'enabled: false');
+  scene.appendChild(cam);
+
+  // Target entity
+  const entity = document.createElement('a-entity');
+  entity.setAttribute('mindar-image-target', 'targetIndex: 0');
+
+  const plane = document.createElement('a-plane');
+  plane.setAttribute('position', '0 0 0');
+  plane.setAttribute('rotation', '0 0 0');
+  plane.setAttribute('width', '1');
+  plane.setAttribute('height', '0.5625'); // 16:9 — change if artwork is different ratio
+  plane.setAttribute('material', 'src: #ar-video; transparent: true; opacity: 1;');
+  entity.appendChild(plane);
+
+  entity.addEventListener('targetFound', () => {
+    vid.play().catch(() => {});
+    document.getElementById('hud-status').textContent = 'Playing — ' + student.name;
+    document.getElementById('scan-ring').classList.add('found');
+  });
+
+  entity.addEventListener('targetLost', () => {
+    vid.pause();
+    vid.currentTime = 0;
+    document.getElementById('hud-status').textContent = 'Point camera at your artwork…';
+    document.getElementById('scan-ring').classList.remove('found');
+  });
+
+  scene.appendChild(entity);
+  container.appendChild(scene);
+}
+</script>
+</body>
+</html>
